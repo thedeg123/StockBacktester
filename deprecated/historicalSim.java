@@ -63,7 +63,7 @@ class historicalSim {
     System.err.println("Please enter a fileName");
   }
   catch (java.util.NoSuchElementException e){
-    System.err.println("File syntax must be: ticker buyDate(year) sellDate(year)");
+    System.err.println("File syntax must be: ticker num_shares buyDate(year) sellDate(year)");
   }
   return null;
   }
