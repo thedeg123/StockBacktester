@@ -36,31 +36,32 @@ def __fixDates__(data):
     for (i,sell) in enumerate(data['Sell']):
         data.ix[i,'Sell']= scrubDate(sell)
     return data
-def __getMetrics__(userData, data):
+def __getMetric__(userData, data):
     '''
     Takes in a dataframe and gets metrics for it. Helper program for __calculateMetrics__
     '''
-    ticker = userData.index[0]
+    userData["purchasePrice"] = data.ix[0,"close"]
+    userData["sellPrice"] = data.ix[-1,"close"]
     userData["purchaseVal"] = data.ix[0,"close"] * userData["Shares"]
-    userData["currentVal"] = data.ix[1,"close"] * userData["Shares"]
+    userData["currentVal"] = data.ix[-1,"close"] * userData["Shares"]
     #Getting the beta
-    userData["Beta"] = (userData["currentVal"] - userData["purchaseVal"]).round(3)
-    userData["pBeta"] = userData["Beta"] / data.ix[0,"close"]
+    userData["Beta"] = round((userData["currentVal"] - userData["purchaseVal"]), 2)
+    userData["pBeta"] = userData["Beta"] / userData["purchaseVal"]
     return userData
 def __calculateMetrics__(data, userData):
     '''
     Prints portfolio metrics.
     '''
-    for (ticker,data) in data:
-        print(userData)
-        userData.update(__getMetrics__(userData, data))
+    for (ticker,sdata) in data:
+        ndat = __getMetric__(userData.loc[ticker].copy(), sdata)
+        userData = userData.reindex(ndat.index, axis=1)
+        userData.loc[ticker] = ndat
+        #userData = userData.merge(newMetrix,  how='left', left_on=userData.index, right_on=newMetrix.index)
         startd = userData.ix[ticker, "Buy"]
         endd = userData.ix[ticker, "Sell"]
-        print(ticker, "Change of: ", userData.ix[ticker, "Beta"] , "over", (endd - startd).days, "days with",\
+        print(ticker, "Change of: ", userData.ix[ticker,"Beta"] , "over", (endd - startd).days, "days with",\
         userData.ix[ticker, "Shares"], "shares.")
-
-    print("Net change of:",userData["Beta"].sum(), "over", (userData['Sell'].max()-userData['Buy'].min()).days, "days.")
-
+    return userData
 def stockRetrace(file):
     '''
     Finds portfolio change. comp is for alpha.
@@ -69,20 +70,22 @@ def stockRetrace(file):
     userData = __fixDates__(pd.DataFrame(fin, columns=fin.keys()))
     panel_data=dict()
     for index,stock in userData.iterrows():
-        endv = "\n" if (index==userData.iloc[-1:].index[0]) else "\n"
+        endv = "\n" if (index==userData.iloc[-1:].index[0]) else "\r"
         print("Retreaving data for:",stock.name,end=endv)
         try:
-            dates = [pdr.DataReader(stock.name,'iex', start=stock.Buy, end=stock.Buy), \
-            pdr.DataReader(stock.name,'iex', start=stock.Sell, end=stock.Sell)]
-            panel_data[stock.name] = pd.concat(dates)
+            pdat = pdr.DataReader(stock.name,'iex', start=stock.Buy, end=stock.Sell)
+            panel_data[stock.name] = pdat.drop(pdat.index[1:-1])
         except ValueError:
             print("The data for \"", stock.name, "\" are incomplete. Continuing without.")
             continue;
-    __calculateMetrics__(panel_data.items(), userData)
+    userData = __calculateMetrics__(panel_data.items(), userData)
+    #portfolioBeta
+    portb = (userData["currentVal"].sum() - userData["purchaseVal"].sum())/ userData["purchaseVal"].sum() *100
     #Generating alpha based off spy (s&p index) and when first stock was bought and last was sold.
-    print(userData)
-
-    compalph = pdr.DataReader(COMPVAL,'iex', start=userData['Buy'].min(), end=userData['Sell'].max())
+    compdat = pdr.DataReader(COMPVAL,'iex', start=userData['Buy'].min(), end=userData['Sell'].max())
+    compbeta=((compdat.ix[-1, "close"] - compdat.ix[0,"open"])/ compdat.ix[0,"open"]) *100
+    print("Net beta: $", userData["Beta"].sum(), " or ", round(portb,2),"%", sep='')
+    print("Net alpha: ", round(portb-compbeta, 2), "%", sep='')
     #print(panel_data, userData.head())
 if __name__=='__main__':
     stockRetrace(sys.argv[1:])
