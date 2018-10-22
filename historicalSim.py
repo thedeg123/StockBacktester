@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 from pandas_datareader import data as pdr
 from datetime import datetime, timedelta
-from numpy import round
+from numpy import round, arange, where, array
 from dateutil.relativedelta import relativedelta
 from pandas.tseries.holiday import USFederalHolidayCalendar
 import pandas as pd
 import sys
-import matplotlib as plt
+import matplotlib.pyplot as plt
 COMPVAL = 'SPY'
 
 def scrubDate(date):
@@ -56,12 +56,24 @@ def __calculateMetrics__(data, userData):
         ndat = __getMetric__(userData.loc[ticker].copy(), sdata)
         userData = userData.reindex(ndat.index, axis=1)
         userData.loc[ticker] = ndat
-        #userData = userData.merge(newMetrix,  how='left', left_on=userData.index, right_on=newMetrix.index)
         startd = userData.ix[ticker, "Buy"]
         endd = userData.ix[ticker, "Sell"]
         print(ticker, "Change of: ", userData.ix[ticker,"Beta"] , "over", (endd - startd).days, "days with",\
         userData.ix[ticker, "Shares"], "shares.")
     return userData
+def graphData(userData, compdat):
+    portb = (userData["currentVal"].sum() - userData["purchaseVal"].sum())/ userData["purchaseVal"].sum() *100
+    compb=((compdat.ix[-1, "close"] - compdat.ix[0,"open"])/ compdat.ix[0,"open"]) *100
+    elements = userData.shape[0] +2
+    width = 1/elements
+    colors = where(userData["Beta"]>=0, 'blue','red').tolist()
+    graphdata= userData["pBeta"].tolist() + [portb, compb]
+    p1 = plt.bar(arange(elements), graphdata, width, color = (colors + ['yellow', 'green']))
+    plt.ylabel("%beta")
+    plt.yticks(arange(min(graphdata),max(graphdata)+0.01,max(graphdata)/10))
+    plt.xticks(arange(elements),((userData.index).tolist() + ["portfolio Beta", "S&P 500"]))
+    plt.show()
+
 def stockRetrace(file):
     '''
     Finds portfolio change. comp is for alpha.
@@ -78,14 +90,19 @@ def stockRetrace(file):
         except ValueError:
             print("The data for \"", stock.name, "\" are incomplete. Continuing without.")
             continue;
+        except KeyError:
+            print("The ticker \"", stock.name, "\" was not found. Continuing without.", sep='')
+            continue;
     userData = __calculateMetrics__(panel_data.items(), userData)
     #portfolioBeta
     portb = (userData["currentVal"].sum() - userData["purchaseVal"].sum())/ userData["purchaseVal"].sum() *100
     #Generating alpha based off spy (s&p index) and when first stock was bought and last was sold.
     compdat = pdr.DataReader(COMPVAL,'iex', start=userData['Buy'].min(), end=userData['Sell'].max())
-    compbeta=((compdat.ix[-1, "close"] - compdat.ix[0,"open"])/ compdat.ix[0,"open"]) *100
+    compb=((compdat.ix[-1, "close"] - compdat.ix[0,"open"])/ compdat.ix[0,"open"]) *100
     print("Net beta: $", userData["Beta"].sum(), " or ", round(portb,2),"%", sep='')
-    print("Net alpha: ", round(portb-compbeta, 2), "%", sep='')
+    print("Net alpha: ", round(portb-compb, 2), "%", sep='')
+    graphData(userData, compdat)
+    return round(portb-compb, 2)
     #print(panel_data, userData.head())
 if __name__=='__main__':
     stockRetrace(sys.argv[1:])
