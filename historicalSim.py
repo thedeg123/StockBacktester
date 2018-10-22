@@ -61,9 +61,7 @@ def __calculateMetrics__(data, userData):
         print(ticker, "Change of: ", userData.ix[ticker,"Beta"] , "over", (endd - startd).days, "days with",\
         userData.ix[ticker, "Shares"], "shares.")
     return userData
-def graphData(userData, compdat):
-    portb = (userData["currentVal"].sum() - userData["purchaseVal"].sum())/ userData["purchaseVal"].sum() *100
-    compb=((compdat.ix[-1, "close"] - compdat.ix[0,"open"])/ compdat.ix[0,"open"]) *100
+def graphData(userData, compdat, portb, compb):
     elements = userData.shape[0] +2
     width = 1/elements
     colors = where(userData["Beta"]>=0, 'blue','red').tolist()
@@ -95,13 +93,13 @@ def stockRetrace(file):
             continue;
     userData = __calculateMetrics__(panel_data.items(), userData)
     #portfolioBeta
-    portb = (userData["currentVal"].sum() - userData["purchaseVal"].sum())/ userData["purchaseVal"].sum() *100
+    portb = (userData["currentVal"].sum() - userData["purchaseVal"].sum())/ userData["purchaseVal"].sum()
     #Generating alpha based off spy (s&p index) and when first stock was bought and last was sold.
     compdat = pdr.DataReader(COMPVAL,'iex', start=userData['Buy'].min(), end=userData['Sell'].max())
-    compb=((compdat.ix[-1, "close"] - compdat.ix[0,"open"])/ compdat.ix[0,"open"]) *100
+    compb=((compdat.ix[-1, "close"] - compdat.ix[0,"open"])/ compdat.ix[0,"open"])
     print("Net beta: $", userData["Beta"].sum(), " or ", round(portb,2),"%", sep='')
-    print("Net alpha: ", round(portb-compb, 2), "%", sep='')
-    graphData(userData, compdat)
+    print("Net alpha: ", round((portb-compb)*100, 2), "%", sep='')
+    graphData(userData, compdat, portb, compb)
     return round(portb-compb, 2)
     #print(panel_data, userData.head())
 if __name__=='__main__':
